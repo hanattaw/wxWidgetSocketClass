@@ -77,6 +77,7 @@ public:
   void Test1(wxSocketBase *sock);
   void Test2(wxSocketBase *sock);
   void Test3(wxSocketBase *sock);
+  void Test4(wxSocketBase *sock);
 
   // convenience functions
   void UpdateStatusBar();
@@ -339,7 +340,7 @@ void MyFrame::Test1(wxSocketBase *sock)
 
 void MyFrame::Test2(wxSocketBase *sock)
 {
-  char buf[4096];
+  char buf[4096], buf2[1024];
 
   TestLogger logtest("Test 2");
 
@@ -354,7 +355,19 @@ void MyFrame::Test2(wxSocketBase *sock)
       return;
   }
 
-  wxLogMessage("Got \"%s\" from client.", wxString::FromUTF8(buf, len));
+
+  // Read the message
+  wxUint32 len2 = sock->ReadMsg(buf2, sizeof(buf2)).LastCount();
+  if ( !len2 )
+  {
+      wxLogError("Failed to read message.");
+      return;
+  }
+
+
+  wxLogMessage("Got \"%s\" from client.....(1)", wxString::FromUTF8(buf, len));
+  wxLogMessage("Got \"%s\" from client.....(2)", wxString::FromUTF8(buf2, len2));
+
   wxLogMessage("Sending the data back");
 
   // Write it back
@@ -381,6 +394,62 @@ void MyFrame::Test3(wxSocketBase *sock)
 
   // Write it back
   sock->Write(buf, len * 1024);
+}
+
+void MyFrame::Test4(wxSocketBase *sock)
+{
+  TestLogger logtest("Test 4");
+
+  // Receive data from socket and send it back. We will first
+  // get a byte with the buffer size, so we can specify the
+  // exact size and use the wxSOCKET_WAITALL flag. Also, we
+  // disabled input events so we won't have unwanted reentrance.
+  // This way we can avoid the infamous wxSOCKET_BLOCK flag.
+
+  sock->SetFlags(wxSOCKET_WAITALL);
+
+  // Read the size
+  unsigned char len;
+  sock->Read(&len, 1);
+  wxCharBuffer buf(len);
+
+  // Read the data
+  sock->Read(buf.data(), len);
+  wxLogMessage("Got the data, sending it back");
+
+  // Write it back
+  sock->Write(buf, len);
+
+
+  // Read first Integer
+  // Read the size
+  unsigned char len11;
+  sock->Read(&len11, 1);
+  wxCharBuffer buf11(len11);
+
+  // Read the data
+  sock->Read(buf11.data(), len11);
+  wxLogMessage("Got 1st integer \"%s\" from client.", wxString::FromUTF8(buf11, len11));
+
+  // Read second Integer
+  // Read the size
+  unsigned char len20;
+  sock->Read(&len20, 1);
+  wxCharBuffer buf20(len20);
+
+  // Read the data
+  sock->Read(buf20.data(), len20);
+  wxLogMessage("Got 2nd integer \"%s\" from client.", wxString::FromUTF8(buf20, len20));
+
+  int a = wxAtoi(buf11) + wxAtoi(buf20);
+  wxString result = wxString::Format("%i",a);
+
+  // Write result
+  unsigned char len10  = (unsigned char)(wxStrlen(result) + 1);
+  m_text->AppendText(_("Sending a result to the client ..."));
+  sock->Write(&len10, 1);
+  sock->Write(result.ToUTF8(), len10);
+  m_text->AppendText(sock->Error() ? _("failed !\n") : _("done\n"));
 }
 
 void MyFrame::OnServerEvent(wxSocketEvent& event)
@@ -463,6 +532,7 @@ void MyFrame::OnSocketEvent(wxSocketEvent& event)
         case 0xBE: Test1(sock); break;
         case 0xCE: Test2(sock); break;
         case 0xDE: Test3(sock); break;
+        case 0xEE: Test4(sock); break;
         default:
           wxLogMessage("Unknown test id received from client");
       }

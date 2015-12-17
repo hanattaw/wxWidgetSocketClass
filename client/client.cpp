@@ -70,6 +70,7 @@ public:
   void OnTest1(wxCommandEvent& event);
   void OnTest2(wxCommandEvent& event);
   void OnTest3(wxCommandEvent& event);
+  void OnTest4(wxCommandEvent& event);
   void OnCloseConnection(wxCommandEvent& event);
 
 #if wxUSE_URL
@@ -140,6 +141,7 @@ enum
   CLIENT_TEST1,
   CLIENT_TEST2,
   CLIENT_TEST3,
+  CLIENT_TEST4,
   CLIENT_CLOSE,
 #if wxUSE_URL
   CLIENT_TESTURL,
@@ -164,6 +166,7 @@ wxBEGIN_EVENT_TABLE(MyFrame, wxFrame)
   EVT_MENU(CLIENT_TEST1,    MyFrame::OnTest1)
   EVT_MENU(CLIENT_TEST2,    MyFrame::OnTest2)
   EVT_MENU(CLIENT_TEST3,    MyFrame::OnTest3)
+  EVT_MENU(CLIENT_TEST4,    MyFrame::OnTest4)
   EVT_MENU(CLIENT_CLOSE,    MyFrame::OnCloseConnection)
   EVT_MENU(CLIENT_DGRAM,    MyFrame::OnDatagram)
 #if wxUSE_URL
@@ -224,6 +227,7 @@ MyFrame::MyFrame() : wxFrame((wxFrame *)NULL, wxID_ANY,
   m_menuSocket->Append(CLIENT_TEST1, _("Test &1\tCtrl-F1"), _("Test basic functionality"));
   m_menuSocket->Append(CLIENT_TEST2, _("Test &2\tCtrl-F2"), _("Test ReadMsg and WriteMsg"));
   m_menuSocket->Append(CLIENT_TEST3, _("Test &3\tCtrl-F3"), _("Test large data transfer"));
+  m_menuSocket->Append(CLIENT_TEST4, _("Test &4\tCtrl-F4"), _("Calculator"));
   m_menuSocket->AppendSeparator();
   m_menuSocket->Append(CLIENT_CLOSE, _("&Close session\tCtrl-Q"), _("Close connection"));
 
@@ -518,6 +522,95 @@ void MyFrame::OnTest3(wxCommandEvent& WXUNUSED(event))
   UpdateStatusBar();
 }
 
+void MyFrame::OnTest4(wxCommandEvent& WXUNUSED(event))
+{
+  // Disable socket menu entries (exception: Close Session)
+  m_busy = true;
+  UpdateStatusBar();
+
+  m_text->AppendText(_("\n=== Test 4 begins ===\n"));
+
+  // Tell the server which test we are running
+  unsigned char c = 0xEE;
+  m_sock->Write(&c, 1);
+
+  // Send some data and read it back. We know the size of the
+  // buffer, so we can specify the exact number of bytes to be
+  // sent or received and use the wxSOCKET_WAITALL flag. Also,
+  // we have disabled menu entries which could interfere with
+  // the test, so we can safely avoid the wxSOCKET_BLOCK flag.
+  //
+  // First we send a byte with the length of the string, then
+  // we send the string itself (do NOT try to send any integral
+  // value larger than a byte "as is" across the network, or
+  // you might be in trouble! Ever heard about big and little
+  // endian computers?)
+
+  m_sock->SetFlags(wxSOCKET_WAITALL);
+
+  const char *buf1 = "Test string (less than 256 chars!)";
+  unsigned char len  = (unsigned char)(wxStrlen(buf1) + 1);
+  wxCharBuffer buf2(wxStrlen(buf1));
+
+  m_text->AppendText(_("Sending a test buffer to the server ..."));
+  m_sock->Write(&len, 1);
+  m_sock->Write(buf1, len);
+  m_text->AppendText(m_sock->Error() ? _("failed !\n") : _("done\n"));
+
+  m_text->AppendText(_("Receiving the buffer back from server ..."));
+  m_sock->Read(buf2.data(), len);
+  m_text->AppendText(m_sock->Error() ? _("failed !\n") : _("done\n"));
+
+  m_text->AppendText(_("Comparing the two buffers ..."));
+  if (memcmp(buf1, buf2, len) != 0)
+  {
+    m_text->AppendText(_("failed!\n"));
+    m_text->AppendText(_("Test 4 failed !\n"));
+  }
+  else
+  {
+    m_text->AppendText(_("done\n"));
+    m_text->AppendText(_("Test 4 passed !\n"));
+  }
+
+  // Send First integer
+  wxString buf1st = wxGetTextFromUser(
+    _("Enter 1st Integer:"),
+    _("Test 4 ..."),
+    _("1"));
+  unsigned char len11  = (unsigned char)(wxStrlen(buf1st) + 1);
+  m_text->AppendText(_("Sending a 1st integer to the server ..."));
+  m_sock->Write(&len11, 1);
+  m_sock->Write(buf1st, wxStrlen(buf1st) + 1);
+  m_text->AppendText(m_sock->Error() ? _("failed !\n") : _("done\n"));
+
+  // Send Send integer
+  wxString buf2nd = wxGetTextFromUser(
+    _("Enter 2nd Integer:"),
+    _("Test 4 ..."),
+    _("2"));
+  unsigned char len20  = (unsigned char)(wxStrlen(buf2nd) + 1);
+  m_text->AppendText(_("Sending a 2nd integer to the server ..."));
+  m_sock->Write(&len20, 1);
+  m_sock->Write(buf2nd, len20);
+  m_text->AppendText(m_sock->Error() ? _("failed !\n") : _("done\n"));
+
+  // Read the size
+  unsigned char len10;
+  m_sock->Read(&len10, 1);
+  wxCharBuffer buf10(len10);
+
+  // Read the data
+  m_sock->Read(buf10.data(), len10);
+  wxString dd = wxString::FromUTF8(buf10, len10);
+  wxLogMessage("Result from %s + %s is %d.", buf1st.ToUTF8(), buf2nd.ToUTF8(), wxAtoi(dd));
+
+  m_text->AppendText(_("=== Test 4 ends ===\n"));
+  
+  m_busy = false;
+  UpdateStatusBar();
+}
+
 void MyFrame::OnCloseConnection(wxCommandEvent& WXUNUSED(event))
 {
   m_sock->Close();
@@ -721,5 +814,7 @@ void MyFrame::UpdateStatusBar()
   m_menuSocket->Enable(CLIENT_TEST1, m_sock->IsConnected() && !m_busy);
   m_menuSocket->Enable(CLIENT_TEST2, m_sock->IsConnected() && !m_busy);
   m_menuSocket->Enable(CLIENT_TEST3, m_sock->IsConnected() && !m_busy);
+  m_menuSocket->Enable(CLIENT_TEST4, m_sock->IsConnected() && !m_busy);
+
   m_menuSocket->Enable(CLIENT_CLOSE, m_sock->IsConnected());
 }
